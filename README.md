@@ -1,6 +1,6 @@
 # MysqlGate
 
-Mostly inspired by PostgreSQL, MysqlGate is another proxy for mysql but aimed at extendable.
+Mostly inspired by PostgreSQL, MysqlGate is another proxy for mysql but aimed at extendability.
 
 
 ## Designed Extend Point
