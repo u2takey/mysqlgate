@@ -11,18 +11,19 @@ package mysql
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 	"io"
 	"reflect"
+
+	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 )
 
-type mysqlStmt struct {
-	mc         *mysqlConn
+type MysqlStmt struct {
+	mc         *MysqlConn
 	id         uint32
 	paramCount int
 }
 
-func (stmt *mysqlStmt) Close() error {
+func (stmt *MysqlStmt) Close() error {
 	if stmt.mc == nil || stmt.mc.closed.IsSet() {
 		// driver.Stmt.Close can be called more than once, thus this function
 		// has to be idempotent.
@@ -36,20 +37,20 @@ func (stmt *mysqlStmt) Close() error {
 	return err
 }
 
-func (stmt *mysqlStmt) NumInput() int {
+func (stmt *MysqlStmt) NumInput() int {
 	return stmt.paramCount
 }
 
-func (stmt *mysqlStmt) ColumnConverter(idx int) driver.ValueConverter {
+func (stmt *MysqlStmt) ColumnConverter(idx int) driver.ValueConverter {
 	return converter{}
 }
 
-func (stmt *mysqlStmt) CheckNamedValue(nv *driver.NamedValue) (err error) {
+func (stmt *MysqlStmt) CheckNamedValue(nv *driver.NamedValue) (err error) {
 	nv.Value, err = converter{}.ConvertValue(nv.Value)
 	return
 }
 
-func (stmt *mysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
+func (stmt *MysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
 	if stmt.mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
@@ -93,11 +94,11 @@ func (stmt *mysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
 	}, nil
 }
 
-func (stmt *mysqlStmt) Query(args []driver.Value) (driver.Rows, error) {
+func (stmt *MysqlStmt) Query(args []driver.Value) (driver.Rows, error) {
 	return stmt.query(args)
 }
 
-func (stmt *mysqlStmt) query(args []driver.Value) (*binaryRows, error) {
+func (stmt *MysqlStmt) query(args []driver.Value) (*binaryRows, error) {
 	if stmt.mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
@@ -120,7 +121,7 @@ func (stmt *mysqlStmt) query(args []driver.Value) (*binaryRows, error) {
 
 	if resLen > 0 {
 		rows.mc = mc
-		rows.rs.columns, err = mc.readColumns(resLen)
+		rows.rs.columns, rows.rs.rawColumns, err = mc.readColumns(resLen)
 	} else {
 		rows.rs.done = true
 

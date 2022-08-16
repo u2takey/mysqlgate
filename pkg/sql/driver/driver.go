@@ -250,6 +250,13 @@ type Conn interface {
 	Begin() (Tx, error)
 }
 
+type ConnExtend interface {
+	LastInsertId() uint64
+	RowsAffected() uint64
+	Status() uint16
+	ServerVersion() string
+}
+
 // ConnPrepareContext enhances the Conn interface with context.
 type ConnPrepareContext interface {
 	// PrepareContext returns a prepared statement, bound to this connection.
@@ -461,6 +468,10 @@ type RowsNextResultSet interface {
 type RowsColumnTypeScanType interface {
 	Rows
 	ColumnTypeScanType(index int) reflect.Type
+}
+
+type RowColumnTypeExtend interface {
+	ColumnTypeRaw(index int) []byte
 }
 
 // RowsColumnTypeDatabaseTypeName may be implemented by Rows. It should return the

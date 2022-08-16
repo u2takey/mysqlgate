@@ -10,8 +10,9 @@ package mysql
 
 import (
 	"context"
-	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 	"net"
+
+	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 )
 
 type connector struct {
@@ -23,8 +24,8 @@ type connector struct {
 func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	var err error
 
-	// New mysqlConn
-	mc := &mysqlConn{
+	// New MysqlConn
+	mc := &MysqlConn{
 		maxAllowedPacket: maxPacketSize,
 		maxWriteSize:     maxPacketSize - 1,
 		closech:          make(chan struct{}),

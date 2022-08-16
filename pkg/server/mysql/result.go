@@ -8,24 +8,16 @@
 
 package mysql
 
-type mysqlTx struct {
-	mc *MysqlConn
+type MysqlResult struct {
+	Status       StatusFlag
+	AffectedRows uint64
+	InsertId     uint64
 }
 
-func (tx *mysqlTx) Commit() (err error) {
-	if tx.mc == nil || tx.mc.closed.IsSet() {
-		return ErrInvalidConn
-	}
-	err = tx.mc.exec("COMMIT")
-	tx.mc = nil
-	return
+func (res *MysqlResult) LastInsertId() (uint64, error) {
+	return res.InsertId, nil
 }
 
-func (tx *mysqlTx) Rollback() (err error) {
-	if tx.mc == nil || tx.mc.closed.IsSet() {
-		return ErrInvalidConn
-	}
-	err = tx.mc.exec("ROLLBACK")
-	tx.mc = nil
-	return
+func (res *MysqlResult) RowsAffected() (uint64, error) {
+	return res.AffectedRows, nil
 }

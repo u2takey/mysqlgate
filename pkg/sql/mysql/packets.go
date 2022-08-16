@@ -15,17 +15,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 	"io"
 	"math"
 	"time"
+
+	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 )
 
 // Packets documentation:
 // http://dev.mysql.com/doc/internals/en/client-server-protocol.html
 
 // Read packet to buffer 'data'
-func (mc *mysqlConn) readPacket() ([]byte, error) {
+func (mc *MysqlConn) readPacket() ([]byte, error) {
 	var prevData []byte
 	for {
 		// read packet header
@@ -90,7 +91,7 @@ func (mc *mysqlConn) readPacket() ([]byte, error) {
 }
 
 // Write packet buffer 'data'
-func (mc *mysqlConn) writePacket(data []byte) error {
+func (mc *MysqlConn) writePacket(data []byte) error {
 	pktLen := len(data) - 4
 
 	if pktLen > mc.maxAllowedPacket {
@@ -184,7 +185,7 @@ func (mc *mysqlConn) writePacket(data []byte) error {
 
 // Handshake Initialization Packet
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
-func (mc *mysqlConn) readHandshakePacket() (data []byte, plugin string, err error) {
+func (mc *MysqlConn) readHandshakePacket() (data []byte, plugin string, err error) {
 	data, err = mc.readPacket()
 	if err != nil {
 		// for init we can rewrite this to ErrBadConn for sql.Driver to retry, since
@@ -210,7 +211,10 @@ func (mc *mysqlConn) readHandshakePacket() (data []byte, plugin string, err erro
 
 	// server version [null terminated string]
 	// connection id [4 bytes]
-	pos := 1 + bytes.IndexByte(data[1:], 0x00) + 1 + 4
+	pos := 1
+	nullPos := bytes.IndexByte(data[pos:], 0x00)
+	mc.serverVersion = string(data[pos : nullPos+1])
+	pos += nullPos + 1 + 4
 
 	// first part of the password cipher [8 bytes]
 	authData := data[pos : pos+8]
@@ -277,7 +281,7 @@ func (mc *mysqlConn) readHandshakePacket() (data []byte, plugin string, err erro
 
 // Client Authentication Packet
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
-func (mc *mysqlConn) writeHandshakeResponsePacket(authResp []byte, plugin string) error {
+func (mc *MysqlConn) writeHandshakeResponsePacket(authResp []byte, plugin string) error {
 	// Adjust client flags based on server support
 	clientFlags := ClientProtocol41 |
 		ClientSecureConn |
@@ -400,7 +404,7 @@ func (mc *mysqlConn) writeHandshakeResponsePacket(authResp []byte, plugin string
 }
 
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
-func (mc *mysqlConn) writeAuthSwitchPacket(authData []byte) error {
+func (mc *MysqlConn) writeAuthSwitchPacket(authData []byte) error {
 	pktLen := 4 + len(authData)
 	data, err := mc.buf.takeSmallBuffer(pktLen)
 	if err != nil {
@@ -418,7 +422,7 @@ func (mc *mysqlConn) writeAuthSwitchPacket(authData []byte) error {
 *                             Command Packets                                 *
 ******************************************************************************/
 
-func (mc *mysqlConn) writeCommandPacket(command byte) error {
+func (mc *MysqlConn) writeCommandPacket(command byte) error {
 	// Reset Packet Sequence
 	mc.sequence = 0
 
@@ -436,7 +440,7 @@ func (mc *mysqlConn) writeCommandPacket(command byte) error {
 	return mc.writePacket(data)
 }
 
-func (mc *mysqlConn) writeCommandPacketStr(command byte, arg string) error {
+func (mc *MysqlConn) writeCommandPacketStr(command byte, arg string) error {
 	// Reset Packet Sequence
 	mc.sequence = 0
 
@@ -458,7 +462,7 @@ func (mc *mysqlConn) writeCommandPacketStr(command byte, arg string) error {
 	return mc.writePacket(data)
 }
 
-func (mc *mysqlConn) writeCommandPacketUint32(command byte, arg uint32) error {
+func (mc *MysqlConn) writeCommandPacketUint32(command byte, arg uint32) error {
 	// Reset Packet Sequence
 	mc.sequence = 0
 
@@ -486,7 +490,7 @@ func (mc *mysqlConn) writeCommandPacketUint32(command byte, arg uint32) error {
 *                              Result Packets                                 *
 ******************************************************************************/
 
-func (mc *mysqlConn) readAuthResult() ([]byte, string, error) {
+func (mc *MysqlConn) readAuthResult() ([]byte, string, error) {
 	data, err := mc.readPacket()
 	if err != nil {
 		return nil, "", err
@@ -520,7 +524,7 @@ func (mc *mysqlConn) readAuthResult() ([]byte, string, error) {
 }
 
 // Returns error if Packet is not an 'Result OK'-Packet
-func (mc *mysqlConn) readResultOK() error {
+func (mc *MysqlConn) readResultOK() error {
 	data, err := mc.readPacket()
 	if err != nil {
 		return err
@@ -534,7 +538,7 @@ func (mc *mysqlConn) readResultOK() error {
 
 // Result Set Header Packet
 // http://dev.mysql.com/doc/internals/en/com-query-response.html#packet-ProtocolText::Resultset
-func (mc *mysqlConn) readResultSetHeaderPacket() (int, error) {
+func (mc *MysqlConn) readResultSetHeaderPacket() (int, error) {
 	data, err := mc.readPacket()
 	if err == nil {
 		switch data[0] {
@@ -562,7 +566,7 @@ func (mc *mysqlConn) readResultSetHeaderPacket() (int, error) {
 
 // Error Packet
 // http://dev.mysql.com/doc/internals/en/generic-response-packets.html#packet-ERR_Packet
-func (mc *mysqlConn) handleErrorPacket(data []byte) error {
+func (mc *MysqlConn) handleErrorPacket(data []byte) error {
 	if data[0] != IERR {
 		return ErrMalformPkt
 	}
@@ -603,13 +607,13 @@ func (mc *mysqlConn) handleErrorPacket(data []byte) error {
 	}
 }
 
-func readStatus(b []byte) statusFlag {
-	return statusFlag(b[0]) | statusFlag(b[1])<<8
+func readStatus(b []byte) StatusFlag {
+	return StatusFlag(b[0]) | StatusFlag(b[1])<<8
 }
 
 // Ok Packet
 // http://dev.mysql.com/doc/internals/en/generic-response-packets.html#packet-OK_Packet
-func (mc *mysqlConn) handleOkPacket(data []byte) error {
+func (mc *MysqlConn) handleOkPacket(data []byte) error {
 	var n, m int
 
 	// 0x00 [1 byte]
@@ -622,7 +626,7 @@ func (mc *mysqlConn) handleOkPacket(data []byte) error {
 
 	// server_status [2 bytes]
 	mc.status = readStatus(data[1+n+m : 1+n+m+2])
-	if mc.status&statusMoreResultsExists != 0 {
+	if mc.status&StatusMoreResultsExists != 0 {
 		return nil
 	}
 
@@ -633,33 +637,35 @@ func (mc *mysqlConn) handleOkPacket(data []byte) error {
 
 // Read Packets as Field Packets until EOF-Packet or an Error appears
 // http://dev.mysql.com/doc/internals/en/com-query-response.html#packet-Protocol::ColumnDefinition41
-func (mc *mysqlConn) readColumns(count int) ([]mysqlField, error) {
+func (mc *MysqlConn) readColumns(count int) ([]mysqlField, [][]byte, error) {
 	columns := make([]mysqlField, count)
+	rawFields := make([][]byte, 0, count)
 
 	for i := 0; ; i++ {
 		data, err := mc.readPacket()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		rawFields = append(rawFields, data)
 
 		// EOF Packet
 		if data[0] == IEOF && (len(data) == 5 || len(data) == 1) {
 			if i == count {
-				return columns, nil
+				return columns, rawFields, nil
 			}
-			return nil, fmt.Errorf("column count mismatch n:%d len:%d", count, len(columns))
+			return nil, nil, fmt.Errorf("column count mismatch n:%d len:%d", count, len(columns))
 		}
 
 		// Catalog
 		pos, err := skipLengthEncodedString(data)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		// Database [len coded string]
 		n, err := skipLengthEncodedString(data[pos:])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		pos += n
 
@@ -667,14 +673,14 @@ func (mc *mysqlConn) readColumns(count int) ([]mysqlField, error) {
 		if mc.cfg.ColumnsWithAlias {
 			tableName, _, n, err := readLengthEncodedString(data[pos:])
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			pos += n
 			columns[i].tableName = string(tableName)
 		} else {
 			n, err = skipLengthEncodedString(data[pos:])
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			pos += n
 		}
@@ -682,14 +688,14 @@ func (mc *mysqlConn) readColumns(count int) ([]mysqlField, error) {
 		// Original table [len coded string]
 		n, err = skipLengthEncodedString(data[pos:])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		pos += n
 
 		// Name [len coded string]
 		name, _, n, err := readLengthEncodedString(data[pos:])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		columns[i].name = string(name)
 		pos += n
@@ -697,7 +703,7 @@ func (mc *mysqlConn) readColumns(count int) ([]mysqlField, error) {
 		// Original name [len coded string]
 		n, err = skipLengthEncodedString(data[pos:])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		pos += n
 
@@ -801,7 +807,7 @@ func (rows *textRows) readRow(dest []driver.Value) error {
 }
 
 // Reads Packets until EOF-Packet or an Error appears. Returns count of Packets read
-func (mc *mysqlConn) readUntilEOF() error {
+func (mc *MysqlConn) readUntilEOF() error {
 	for {
 		data, err := mc.readPacket()
 		if err != nil {
@@ -826,7 +832,7 @@ func (mc *mysqlConn) readUntilEOF() error {
 
 // Prepare Result Packets
 // http://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html
-func (stmt *mysqlStmt) readPrepareResultPacket() (uint16, error) {
+func (stmt *MysqlStmt) readPrepareResultPacket() (uint16, error) {
 	data, err := stmt.mc.readPacket()
 	if err == nil {
 		// packet indicator [1 byte]
@@ -853,7 +859,7 @@ func (stmt *mysqlStmt) readPrepareResultPacket() (uint16, error) {
 }
 
 // http://dev.mysql.com/doc/internals/en/com-stmt-send-long-data.html
-func (stmt *mysqlStmt) writeCommandLongData(paramID int, arg []byte) error {
+func (stmt *MysqlStmt) writeCommandLongData(paramID int, arg []byte) error {
 	maxLen := stmt.mc.maxAllowedPacket - 1
 	pktLen := maxLen
 
@@ -906,7 +912,7 @@ func (stmt *mysqlStmt) writeCommandLongData(paramID int, arg []byte) error {
 
 // Execute Prepared Statement
 // http://dev.mysql.com/doc/internals/en/com-stmt-execute.html
-func (stmt *mysqlStmt) writeExecutePacket(args []driver.Value) error {
+func (stmt *MysqlStmt) writeExecutePacket(args []driver.Value) error {
 	if len(args) != stmt.paramCount {
 		return fmt.Errorf(
 			"argument count mismatch (got: %d; has: %d)",
@@ -1149,8 +1155,8 @@ func (stmt *mysqlStmt) writeExecutePacket(args []driver.Value) error {
 	return mc.writePacket(data)
 }
 
-func (mc *mysqlConn) discardResults() error {
-	for mc.status&statusMoreResultsExists != 0 {
+func (mc *MysqlConn) discardResults() error {
+	for mc.status&StatusMoreResultsExists != 0 {
 		resLen, err := mc.readResultSetHeaderPacket()
 		if err != nil {
 			return err

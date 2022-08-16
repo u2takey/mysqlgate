@@ -158,7 +158,7 @@ func scrambleOldPassword(scramble []byte, password string) []byte {
 }
 
 // Hash password using 4.1+ method (SHA1)
-func scramblePassword(scramble []byte, password string) []byte {
+func ScramblePassword(scramble []byte, password string) []byte {
 	if len(password) == 0 {
 		return nil
 	}
@@ -188,7 +188,7 @@ func scramblePassword(scramble []byte, password string) []byte {
 }
 
 // Hash password using MySQL 8+ method (SHA256)
-func scrambleSHA256Password(scramble []byte, password string) []byte {
+func ScrambleSHA256Password(scramble []byte, password string) []byte {
 	if len(password) == 0 {
 		return nil
 	}
@@ -226,7 +226,7 @@ func encryptPassword(password string, seed []byte, pub *rsa.PublicKey) ([]byte, 
 	return rsa.EncryptOAEP(sha1, rand.Reader, pub, plain, nil)
 }
 
-func (mc *mysqlConn) sendEncryptedPassword(seed []byte, pub *rsa.PublicKey) error {
+func (mc *MysqlConn) sendEncryptedPassword(seed []byte, pub *rsa.PublicKey) error {
 	enc, err := encryptPassword(mc.cfg.Passwd, seed, pub)
 	if err != nil {
 		return err
@@ -234,10 +234,10 @@ func (mc *mysqlConn) sendEncryptedPassword(seed []byte, pub *rsa.PublicKey) erro
 	return mc.writeAuthSwitchPacket(enc)
 }
 
-func (mc *mysqlConn) auth(authData []byte, plugin string) ([]byte, error) {
+func (mc *MysqlConn) auth(authData []byte, plugin string) ([]byte, error) {
 	switch plugin {
 	case "caching_sha2_password":
-		authResp := scrambleSHA256Password(authData, mc.cfg.Passwd)
+		authResp := ScrambleSHA256Password(authData, mc.cfg.Passwd)
 		return authResp, nil
 
 	case "mysql_old_password":
@@ -267,7 +267,7 @@ func (mc *mysqlConn) auth(authData []byte, plugin string) ([]byte, error) {
 		}
 		// https://dev.mysql.com/doc/internals/en/secure-password-authentication.html
 		// Native password authentication only need and will need 20-byte challenge.
-		authResp := scramblePassword(authData[:20], mc.cfg.Passwd)
+		authResp := ScramblePassword(authData[:20], mc.cfg.Passwd)
 		return authResp, nil
 
 	case "sha256_password":
@@ -295,7 +295,7 @@ func (mc *mysqlConn) auth(authData []byte, plugin string) ([]byte, error) {
 	}
 }
 
-func (mc *mysqlConn) handleAuthResult(oldAuthData []byte, plugin string) error {
+func (mc *MysqlConn) handleAuthResult(oldAuthData []byte, plugin string) error {
 	// Read Result Packet
 	authData, newPlugin, err := mc.readAuthResult()
 	if err != nil {

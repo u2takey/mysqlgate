@@ -9,20 +9,22 @@
 package mysql
 
 import (
-	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 	"io"
 	"math"
 	"reflect"
+
+	"github.com/u2takey/mysqlgate/pkg/sql/driver"
 )
 
 type resultSet struct {
 	columns     []mysqlField
+	rawColumns  [][]byte
 	columnNames []string
 	done        bool
 }
 
 type mysqlRows struct {
-	mc     *mysqlConn
+	mc     *MysqlConn
 	rs     resultSet
 	finish func()
 }
@@ -97,6 +99,10 @@ func (rows *mysqlRows) ColumnTypeScanType(i int) reflect.Type {
 	return rows.rs.columns[i].scanType()
 }
 
+func (rows *mysqlRows) ColumnTypeRaw(i int) []byte {
+	return rows.rs.rawColumns[i]
+}
+
 func (rows *mysqlRows) Close() (err error) {
 	if f := rows.finish; f != nil {
 		f()
@@ -136,7 +142,7 @@ func (rows *mysqlRows) HasNextResultSet() (b bool) {
 	if rows.mc == nil {
 		return false
 	}
-	return rows.mc.status&statusMoreResultsExists != 0
+	return rows.mc.status&StatusMoreResultsExists != 0
 }
 
 func (rows *mysqlRows) nextResultSet() (int, error) {
@@ -184,7 +190,7 @@ func (rows *binaryRows) NextResultSet() error {
 		return err
 	}
 
-	rows.rs.columns, err = rows.mc.readColumns(resLen)
+	rows.rs.columns, rows.rs.rawColumns, err = rows.mc.readColumns(resLen)
 	return err
 }
 
@@ -206,7 +212,7 @@ func (rows *textRows) NextResultSet() (err error) {
 		return err
 	}
 
-	rows.rs.columns, err = rows.mc.readColumns(resLen)
+	rows.rs.columns, rows.rs.rawColumns, err = rows.mc.readColumns(resLen)
 	return err
 }
 

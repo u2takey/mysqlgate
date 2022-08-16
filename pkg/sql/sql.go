@@ -1973,6 +1973,22 @@ func (c *Conn) QueryContext(ctx context.Context, query string, args ...interface
 	return c.db.queryDC(ctx, nil, dc, release, query, args)
 }
 
+func (c *Conn) QueryContextExtend(ctx context.Context, query string, args ...interface{}) (*ExtendedRows, error) {
+	rows, err := c.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	eRows := &ExtendedRows{
+		Rows: rows,
+	}
+	if ce, ok := c.dc.ci.(driver.ConnExtend); ok {
+		eRows.AffectedRows = ce.RowsAffected()
+		eRows.InsertId = ce.LastInsertId()
+		eRows.Status = ce.Status()
+	}
+	return eRows, nil
+}
+
 // QueryRowContext executes a query that is expected to return at most one row.
 // QueryRowContext always returns a non-nil value. Errors are deferred until
 // Row's Scan method is called.
@@ -2894,6 +2910,13 @@ type Rows struct {
 	lastcols []driver.Value
 }
 
+type ExtendedRows struct {
+	*Rows
+	Status       uint16
+	InsertId     uint64
+	AffectedRows uint64
+}
+
 // lasterrOrErrLocked returns either lasterr or the provided err.
 // rs.closemu must be read-locked.
 func (rs *Rows) lasterrOrErrLocked(err error) error {
@@ -3087,6 +3110,7 @@ type ColumnType struct {
 	precision    int64
 	scale        int64
 	scanType     reflect.Type
+	RawType      []byte
 }
 
 // Name returns the name or alias of the column.
@@ -3142,6 +3166,9 @@ func rowsColumnInfoSetupConnLocked(rowsi driver.Rows) []*ColumnType {
 		}
 		list[i] = ci
 
+		if prop, ok := rowsi.(driver.RowColumnTypeExtend); ok {
+			ci.RawType = prop.ColumnTypeRaw(i)
+		}
 		if prop, ok := rowsi.(driver.RowsColumnTypeScanType); ok {
 			ci.scanType = prop.ColumnTypeScanType(i)
 		} else {
