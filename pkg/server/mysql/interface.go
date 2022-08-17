@@ -11,7 +11,7 @@ type Connector interface {
 }
 
 type Conn interface {
-	Run(ctx context.Context, plan QueryPlan) error
+	Run(ctx *QueryContext) error
 }
 
 type Tx interface {

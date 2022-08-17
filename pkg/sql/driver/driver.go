@@ -255,6 +255,7 @@ type ConnExtend interface {
 	RowsAffected() uint64
 	Status() uint16
 	ServerVersion() string
+	UseDb(ctx context.Context, dbName string) error
 }
 
 // ConnPrepareContext enhances the Conn interface with context.

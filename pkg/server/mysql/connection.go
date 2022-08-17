@@ -44,7 +44,7 @@ func (mc *MysqlConn) handshake(ctx context.Context) error {
 	return nil
 }
 
-func (mc *MysqlConn) Run(ctx context.Context, plan QueryPlan) error {
+func (mc *MysqlConn) Run(ctx *QueryContext) error {
 	//defer func() {
 	//	r := recover()
 	//	if err, ok := r.(error); ok {
@@ -57,7 +57,8 @@ func (mc *MysqlConn) Run(ctx context.Context, plan QueryPlan) error {
 	//	mc.cleanup()
 	//}()
 
-	mc.plan = plan
+	mc.plan = NewQueryPlan()
+	ctx = ctx.WithConn(mc)
 
 	for {
 		select {
@@ -71,48 +72,51 @@ func (mc *MysqlConn) Run(ctx context.Context, plan QueryPlan) error {
 			}
 			cmd := data[0]
 			data = data[1:]
-
-			switch cmd {
-			case ComQuit:
-				// todo
-				err = mc.writeOK(nil)
-			case ComQuery:
-				err = mc.plan.Query(NewQueryContext(ctx, mc), string(data))
-			case ComPing:
-				err = mc.writeOK(nil)
-			case ComSetOption:
-				err = mc.writeEOF(0)
-			case ComInitDB:
-				// todo pick db and call use db
-				mc.database = string(data)
-				err = mc.writeOK(nil)
-			case ComFieldList:
-				fallthrough
-			case ComStmtPrepare:
-				fallthrough
-			case ComStmtExecute:
-				fallthrough
-			case ComStmtClose:
-				fallthrough
-			case ComStmtSendLongData:
-				fallthrough
-			case ComStmtReset:
-				fallthrough
-			default:
-				msg := fmt.Sprintf("command %d not supported now", cmd)
-				mLog.Error("method", "Run", "msg", msg)
-				err = NewCustomError(ErUnknownError, msg)
-			}
+			err = mc.HandleCommand(ctx.WithCmdData(cmd, string(data)))
 			if err != nil {
-				mc.writeError(err)
-			}
-			if err == mysql.ErrInvalidConn {
-				mc.cleanup()
 				return err
 			}
-			mc.sequence = 0
 		}
 	}
+}
+
+func (mc *MysqlConn) HandleCommand(ctx *QueryContext) (err error) {
+	switch ctx.cmd {
+	case ComQuit:
+		// todo
+		err = mc.writeOK(nil)
+	case ComQuery:
+		err = mc.plan.Query(ctx)
+	case ComPing:
+		err = mc.writeOK(nil)
+	case ComSetOption:
+		err = mc.writeEOF(0)
+	case ComInitDB:
+		err = mc.plan.InitDB(ctx)
+	case ComStmtPrepare:
+		fallthrough
+	case ComStmtExecute:
+		fallthrough
+	case ComStmtClose:
+		fallthrough
+	case ComStmtSendLongData:
+		fallthrough
+	case ComStmtReset:
+		fallthrough
+	default:
+		msg := fmt.Sprintf("command %d not supported now", ctx.cmd)
+		mLog.Error("method", "Run", "msg", msg)
+		err = NewCustomError(ErUnknownError, msg)
+	}
+	if err != nil {
+		_ = mc.writeError(err)
+	}
+	if err == mysql.ErrInvalidConn {
+		mc.cleanup()
+		return err
+	}
+	mc.sequence = 0
+	return nil
 }
 
 func (mc *MysqlConn) cleanup() {

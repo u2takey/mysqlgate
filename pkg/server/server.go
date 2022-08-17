@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
 	"net"
 
 	"github.com/u2takey/mysqlgate/pkg/log"
@@ -53,7 +54,8 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) onConn(c net.Conn) {
 	cfg := mysql.NewConfig()
 	cfg.User, cfg.Passwd = "root", "root"
-	cfg.Salt = [20]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19}
+	cfg.Salt = make([]byte, 20)
+	_, _ = rand.Read(cfg.Salt)
 	connector := mysql.NewConnector(cfg)
 
 	//defer func() {
@@ -74,9 +76,9 @@ func (s *Server) onConn(c net.Conn) {
 		mLog.Error("method", "onConn", "msg", "on connect failed", "err", err.Error())
 		return
 	}
-	mLog.Info("method", "onConn", "msg", "connect success")
-	err = conn.Run(context.Background(), mysql.NewQueryPlan(s.db))
+	mLog.Debug("method", "onConn", "msg", "connect success")
+	err = conn.Run(mysql.NewQueryContext(context.Background(), s.db))
 	if err != nil {
-		mLog.Error("method", "onConn", "err", err.Error(), "msg", "conn run failed")
+		mLog.Error("method", "onConn", "err", err.Error(), "msg", "conn break")
 	}
 }

@@ -666,3 +666,17 @@ func (mc *MysqlConn) RowsAffected() uint64 {
 func (mc *MysqlConn) Status() uint16 {
 	return uint16(mc.status)
 }
+
+func (mc *MysqlConn) UseDb(ctx context.Context, dbName string) error {
+	if mc.cfg.DBName == dbName || len(dbName) == 0 {
+		return nil
+	}
+	if err := mc.writeCommandPacketStr(ComInitDB, dbName); err != nil {
+		return err
+	}
+	if err := mc.readResultOK(); err != nil {
+		return err
+	}
+	mc.cfg.DBName = dbName
+	return nil
+}

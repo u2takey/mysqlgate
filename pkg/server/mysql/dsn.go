@@ -49,18 +49,18 @@ type Config struct {
 	ReadTimeout  time.Duration // I/O read timeout
 	WriteTimeout time.Duration // I/O write timeout
 
-	AllowAllFiles           bool // Allow all files to be used with LOAD DATA LOCAL INFILE
-	AllowCleartextPasswords bool // Allows the cleartext client side plugin
-	AllowNativePasswords    bool // Allows the native password authentication method
-	AllowOldPasswords       bool // Allows the old insecure password method
-	CheckConnLiveness       bool // Check connections for liveness before using them
-	ClientFoundRows         bool // Return number of matching rows instead of rows changed
-	ColumnsWithAlias        bool // Prepend table alias to column names
-	InterpolateParams       bool // Interpolate placeholders into query string
-	MultiStatements         bool // Allow multiple statements in one query
-	ParseTime               bool // Parse time values to time.Time
-	RejectReadOnly          bool // Reject read-only connections
-	Salt                    [20]byte
+	AllowAllFiles           bool   // Allow all files to be used with LOAD DATA LOCAL INFILE
+	AllowCleartextPasswords bool   // Allows the cleartext client side plugin
+	AllowNativePasswords    bool   // Allows the native password authentication method
+	AllowOldPasswords       bool   // Allows the old insecure password method
+	CheckConnLiveness       bool   // Check connections for liveness before using them
+	ClientFoundRows         bool   // Return number of matching rows instead of rows changed
+	ColumnsWithAlias        bool   // Prepend table alias to column names
+	InterpolateParams       bool   // Interpolate placeholders into query string
+	MultiStatements         bool   // Allow multiple statements in one query
+	ParseTime               bool   // Parse time values to time.Time
+	RejectReadOnly          bool   // Reject read-only connections
+	Salt                    []byte // 20 length
 }
 
 // NewConfig creates a new Config and sets default values.
